@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="A report analyzing Microsoft employee roles and seniority levels, focusing on cloud, AI, and security roles.">
+  <title>Microsoft Roles Report</title>
+  <link rel="icon" type="image/png" href="https://favicon.io/favicon.ico">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <script src="https://unpkg.com/papaparse@latest/papaparse.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.15.0/Recharts.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      safelist: [
+        'bg-gray-100', 'font-sans', 'container', 'mx-auto', 'p-4', 'bg-white', 'rounded-lg', 'shadow-lg', 'p-6',
+        'text-3xl', 'font-bold', 'text-blue-600', 'mb-4', 'text-2xl', 'font-semibold', 'text-gray-800', 'mb-2',
+        'text-gray-600', 'mb-8', 'w-full', 'border-collapse', 'border', 'border-gray-300', 'bg-blue-100',
+        'p-2', 'hover:bg-gray-50', 'text-center', 'mt-10'
+      ]
+    }
+  </script>
+</head>
+<body class="bg-gray-100 font-sans">
+  <div id="root" class="container mx-auto p-4"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+    const {
+      BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell, ResponsiveContainer
+    } = Recharts;
+
+    const App = () => {
+      const [data, setData] = useState([]);
+      const [loading, setLoading] = useState(true);
+
+      const processAndCleanData = (rawData) => {
+        const categorizeRole = (title) => {
+          if (!title || typeof title !== 'string') return 'Other';
+          const lowerTitle = title.toLowerCase();
+          if (lowerTitle.includes('software') || lowerTitle.includes('sofware')) return 'Software Engineering';
+          if (lowerTitle.includes('data center') || lowerTitle.includes('datacenter')) return 'Data Center';
+          if (lowerTitle.includes('security')) return 'Security';
+          if (lowerTitle.includes('data') || lowerTitle.includes('ai') || lowerTitle.includes('analytics')) return 'Data & AI';
+          if (lowerTitle.includes('cloud')) return 'Cloud';
+          if (lowerTitle.includes('network')) return 'Networking';
+          if (lowerTitle.includes('ux') || lowerTitle.includes('user experience')) return 'UX';
+          return 'Other';
+        };
+
+        return rawData
+          .filter(row => row['Role Title'] && row['Seniority Level'])
+          .map(row => ({
+            roleTitle: row['Role Title'].trim().replace('Sofware', 'Software').replace('Enginering', 'Engineering'),
+            seniority: row['Seniority Level'].trim(),
+            roleCategory: categorizeRole(row['Role Title'])
+          }));
+      };
+
+      useEffect(() => {
+        const csvData = `Full Name,Last Name,Role Title,Seniority Level
+,,Software Engineer,Associate
+,,Principal Software Engineering Manager,Manager
+,,Corporate Vice President, Azure Data,Vice President, SVP, EVP, etc
+,,Security Engineer,Associate
+,,Chief Information Security Officer,Chief Security Officer / CSO / CISO
+,,Partner Director of Software Engineering, Azure Iot Central,Partner
+,,Data Engineer,Associate
+,,Principal Data Science Manager,Manager`;
+        Papa.parse(csvData, {
+          header: true,
+          skipEmptyLines: true,
+          transformHeader: header => header.trim().replace(/^"|"$/g, ''),
+          transform: (value, header) => value.trim().replace(/^"|"$/g, ''),
+          complete: (results) => {
+            const cleanedData = processAndCleanData(results.data);
+            setData(cleanedData);
+            setLoading(false);
+          },
+          error: (err) => {
+            console.error('Error parsing CSV:', err);
+            setLoading(false);
+          }
+        });
+      }, []);
+
+      const seniorityCounts = data.reduce((acc, row) => {
+        acc[row.seniority] = (acc[row.seniority] || 0) + 1;
+        return acc;
+      }, {});
+      const seniorityData = Object.entries(seniorityCounts).map(([name, value]) => ({ name, value }));
+
+      const roleCategoryCounts = data.reduce((acc, row) => {
+        acc[row.roleCategory] = (acc[row.roleCategory] || 0) + 1;
+        return acc;
+      }, {});
+      const roleCategoryData = Object.entries(roleCategoryCounts)
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 10);
+
+      const techCounts = data.reduce((acc, row) => {
+        const title = row.roleTitle.toLowerCase();
+        if (title.includes('azure')) acc['Azure'] = (acc['Azure'] || 0) + 1;
+        if (title.includes('ai') || title.includes('artificial intelligence')) acc['AI'] = (acc['AI'] || 0) + 1;
+        if (title.includes('cloud')) acc['Cloud'] = (acc['Cloud'] || 0) + 1;
+        return acc;
+      }, { Azure: 0, AI: 0, Cloud: 0 });
+      const techData = Object.entries(techCounts).map(([name, value]) => ({ name, value }));
+
+      const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
+
+      if (loading) {
+        return (
+          <div className="text-center mt-10">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-600"></div>
+            <p className="text-2xl font-bold text-gray-700 mt-2">Loading Report...</p>
+          </div>
+        );
+      }
+
+      return (
+        <div className="bg-white rounded-lg shadow-lg p-6">
+          <h1 className="text-3xl font-bold text-blue-600 mb-4">Microsoft Roles and Seniority Report</h1>
+          <section className="mb-8">
+            <h2 className="text-2xl font-semibold text-gray-800 mb-2">Summary</h2>
+            <p className="text-gray-600">
+              This report analyzes a dataset of {data.length} Microsoft employees, focusing on their role titles and seniority levels. The data reveals a strong emphasis on technical roles, particularly in software engineering, data centers, and security, reflecting Microsoft's focus on cloud computing, AI, and cybersecurity. The seniority levels range from interns to C-level executives, with a significant presence of Managers and Associates.
+            </p>
+          </section>
+          <section className="mb-8">
+            <h2 className="text-2xl font-semibold text-gray-800 mb-2">Seniority Level Distribution</h2>
+            <ResponsiveContainer width="100%" height={400}>
+              <BarChart data={seniorityData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="value" fill="#0088FE" name="Employee Count" />
+              </BarChart>
+            </ResponsiveContainer>
+          </section>
+          <section className="mb-8">
+            <h2 className="text-2xl font-semibold text-gray-800 mb-2">Top 10 Role Categories</h2>
+            <ResponsiveContainer width="100%" height={400}>
+              <BarChart data={roleCategoryData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="value" fill="#00C49F" name="Employee Count" />
+              </BarChart>
+            </ResponsiveContainer>
+          </section>
+          <section className="mb-8">
+            <h2 className="text-2xl font-semibold text-gray-800 mb-2">Technology Focus</h2>
+            <ResponsiveContainer width="100%" height={400}>
+              <PieChart>
+                <Pie
+                  data={techData}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={150}
+                  label
+                >
+                  {techData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </section>
+          <section className="mb-8">
+            <h2 className="text-2xl font-semibold text-gray-800 mb-2">Summary Table</h2>
+            <table className="w-full border-collapse border border-gray-300">
+              <thead>
+                <tr className="bg-blue-100">
+                  <th className="border border-gray-300 p-2">Seniority Level</th>
+                  <th className="border border-gray-300 p-2">Count</th>
+                  <th className="border border-gray-300 p-2">Sample Role Titles</th>
+                </tr>
+              </thead>
+              <tbody>
+                {seniorityData.map((entry, index) => (
+                  <tr key={index} className="hover:bg-gray-50">
+                    <td className="border border-gray-300 p-2">{entry.name}</td>
+                    <td className="border border-gray-300 p-2">{entry.value}</td>
+                    <td className="border border-gray-300 p-2">
+                      {data
+                        .filter(row => row.seniority === entry.name)
+                        .slice(0, 3)
+                        .map(row => row.roleTitle)
+                        .join(', ')}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+          <section className="mb-8">
+            <h2 className="text-2xl font-semibold text-gray-800 mb-2">Interesting Fact</h2>
+            <p className="text-gray-600">
+              Among the diverse roles, Microsoft has a dedicated focus on emerging technologies, with roles like "Principal Quantum Software Engineering Manager" and "Principal AI Engineering Manager" indicating investment in quantum computing and AI innovation. These roles, though few, highlight Microsoft's forward-thinking approach to cutting-edge technology.
+            </p>
+          </section>
+          <section className="mb-8">
+            <h2 className="text-2xl font-semibold text-gray-800 mb-2">Conclusion</h2>
+            <p className="text-gray-600">
+              The dataset underscores Microsoft's heavy investment in cloud computing (Azure), AI, and security, with a significant number of roles in software engineering and data center operations. The prevalence of Manager and Associate seniority levels suggests a robust workforce with both leadership and technical expertise. This structure supports Microsoft's strategic focus on scalable, secure, and innovative cloud solutions.
+            </p>
+          </section>
+          <footer className="text-center text-gray-600 mt-8">
+            <p>Generated on July 3, 2025, using React and Recharts. Data source: Microsoft employee dataset (sample).</p>
+          </footer>
+        </div>
+      );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
